@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Travel Map — Max Dinamyte Travel</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    html, body { overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── Tab bar ── */
+    #tab-bar { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; padding: 0 20px; gap: 2px; }
+    .tab-btn { padding: 13px 18px; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: var(--font); font-size: 14px; font-weight: 500; color: var(--ink3); cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap; }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--ink); }
+
+    /* ── Panels ── */
+    .panel { display: none; flex: 1; min-height: 0; overflow: hidden; }
+    .panel.active { display: flex; }
+
+    /* ── MAP PANEL ── */
+    #panel-map { flex-direction: row; }
+    #sidebar { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); }
+    #sidebar-top { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    #stats-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .mini-stat { background: var(--bg); border-radius: var(--radius-sm); padding: 8px; text-align: center; }
+    .mini-stat .mn { font-size: 20px; font-weight: 700; }
+    .mini-stat .ml { font-size: 10px; color: var(--ink3); margin-top: 1px; }
+    #country-list { flex: 1; overflow-y: auto; padding: 8px; }
+    #map-area { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+    #map-svg-wrap { flex: 1; position: relative; overflow: hidden; }
+    #map-svg-wrap svg { width: 100%; height: 100%; }
+    .country-path { cursor: pointer; stroke: #fff; stroke-width: 0.35; transition: opacity 0.12s; }
+    .country-path:hover { opacity: 0.75; stroke-width: 0.9; }
+    #legend-bar { display: flex; align-items: center; gap: 18px; padding: 8px 16px; background: var(--surface); border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .leg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink3); }
+    .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #detail-section { display: flex; flex-direction: column; gap: 12px; }
+
+    /* ── RECOMMENDER PANEL ── */
+    #panel-rec { flex-direction: column; overflow-y: auto; background: var(--bg); }
+    #rec-scroll { max-width: 700px; width: 100%; margin: 0 auto; padding: 32px 24px 48px; }
+    #rec-scroll h2 { font-size: 22px; margin-bottom: 6px; }
+    .rec-intro { font-size: 14px; color: var(--ink3); margin-bottom: 28px; line-height: 1.7; }
+
+    /* Question blocks */
+    .q-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 14px; }
+    .q-block.hidden { display: none; }
+    .q-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+    .q-num { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .q-text { font-size: 15px; font-weight: 500; color: var(--ink); line-height: 1.45; }
+    .q-options { display: flex; flex-direction: column; gap: 8px; }
+    .q-opt { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; background: var(--bg); }
+    .q-opt:hover { border-color: var(--accent); background: #EBF2FB; }
+    .q-opt.selected { border-color: var(--accent); background: #EBF2FB; }
+    .q-opt input[type=radio] { margin-top: 3px; accent-color: var(--accent); flex-shrink: 0; }
+    .q-opt-label { font-size: 14px; color: var(--ink); line-height: 1.4; }
+    .q-opt-label em { display: block; font-style: normal; font-size: 12px; color: var(--ink3); margin-top: 2px; }
+    .q-opt.selected .q-opt-label em { color: #5a8fc4; }
+    .q-text-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font); font-size: 14px; background: var(--bg); color: var(--ink); transition: border-color 0.15s; }
+    .q-text-input:focus { outline: none; border-color: var(--accent); background: #fff; }
+
+    /* Submit */
+    #rec-submit-row { margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #rec-submit { font-size: 15px; padding: 13px 36px; }
+    #rec-submit-note { font-size: 12px; color: var(--ink3); text-align: center; }
+
+    /* Loading */
+    #rec-loading { display: none; flex-direction: column; align-items: center; gap: 14px; padding: 2.5rem 0; }
+    .rec-plane { font-size: 34px; animation: flyplane 1.4s ease-in-out infinite; }
+    @keyframes flyplane { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-8px) rotate(4deg)} }
+    #rec-loading p { font-size: 14px; color: var(--ink3); text-align: center; }
+
+    /* Error */
+    #rec-error { display: none; background: #fee2e2; border: 1px solid #fca5a5; border-radius: var(--radius-sm); padding: 14px 16px; color: #991b1b; font-size: 14px; margin-top: 16px; line-height: 1.6; }
+
+    /* Results */
+    #rec-results { display: none; margin-top: 8px; }
+    #rec-results h3 { font-size: 20px; margin-bottom: 4px; }
+    .res-meta { font-size: 13px; color: var(--ink3); margin-bottom: 20px; line-height: 1.6; }
+    .rec-cards { display: flex; flex-direction: column; gap: 16px; }
+
+    .rec-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .rec-card-top { padding: 20px 20px 16px; }
+    .rec-card-rank-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .rank-badge { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; padding: 3px 10px; border-radius: 999px; }
+    .rank-1 { background: #FEF3C7; color: #92400E; }
+    .rank-2 { background: #EDE9FE; color: #4C1D95; }
+    .rank-3 { background: #ECFDF5; color: #064E3B; }
+    .advisory-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: #DCFCE7; color: #166534; border: 1px solid #86EFAC; }
+    .rec-card-name { font-size: 19px; font-weight: 700; margin-bottom: 3px; }
+    .rec-card-tagline { font-size: 13px; color: var(--ink3); margin-bottom: 12px; font-style: italic; }
+    .rec-card-body { font-size: 14px; color: var(--ink2); line-height: 1.75; }
+    .rec-visited-note { margin-top: 12px; font-size: 12px; color: #b45309; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px; padding: 7px 10px; }
+    .rec-card-footer { padding: 11px 20px; background: var(--bg); border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; }
+    .rec-tag { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--ink3); }
+
+    #rec-again { display: none; margin-top: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a class="nav-brand" href="#">✈ Max Dinamyte<span class="nav-brand-sub">Travel</span></a>
+    <div class="nav-right">
+      <div class="avatar" id="nav-avatar">?</div>
+      <span id="nav-name" style="font-size:13px;color:var(--ink2)"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-signout">Sign out</button>
+    </div>
+  </nav>
+
+  <!-- Tab bar -->
+  <div id="tab-bar">
+    <button class="tab-btn active" id="tab-map" onclick="switchTab('map')">🗺 My Travel Map</button>
+    <button class="tab-btn" id="tab-rec" onclick="switchTab('rec')">✨ Trip Recommender</button>
+  </div>
+
+  <!-- ════════════════════════════════════════ MAP PANEL ═══ -->
+  <div class="panel active" id="panel-map">
+    <div id="sidebar">
+      <div id="sidebar-top">
+        <input type="text" id="search" placeholder="Search countries…" style="font-size:13px" />
+        <div id="stats-mini">
+          <div class="mini-stat"><div class="mn n-blue"   id="s-blue">0</div><div class="ml">Not visited</div></div>
+          <div class="mini-stat"><div class="mn n-green"  id="s-green">0</div><div class="ml">Want to return</div></div>
+          <div class="mini-stat"><div class="mn n-yellow" id="s-yellow">0</div><div class="ml">Undecided</div></div>
+          <div class="mini-stat"><div class="mn n-red"    id="s-red">0</div><div class="ml">Won't return</div></div>
+        </div>
+      </div>
+      <div id="country-list"><div class="loader-wrap"><div class="spinner"></div></div></div>
+    </div>
+    <div id="map-area">
+      <div id="map-svg-wrap">
+        <div class="tooltip" id="tooltip"></div>
+        <div class="loader-wrap" id="map-loader"><div class="spinner"></div><span>Loading map…</span></div>
+      </div>
+      <div id="legend-bar">
+        <span style="font-size:12px;font-weight:500;color:var(--ink2)">Legend:</span>
+        <span class="leg"><span class="dot dot-blue"></span>Not visited</span>
+        <span class="leg"><span class="dot dot-green"></span>Want to return</span>
+        <span class="leg"><span class="dot dot-yellow"></span>Undecided</span>
+        <span class="leg"><span class="dot dot-red"></span>Won't return</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--ink3)" id="save-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ RECOMMENDER PANEL ═══ -->
+  <div class="panel" id="panel-rec">
+    <div id="rec-scroll">
+      <h2>Find your next trip</h2>
+      <p class="rec-intro">Answer the questions below and we'll suggest 2–3 destinations perfectly matched to your travel style. All recommendations are restricted to U.S. State Department Level 1 or 2 advisory countries, and we'll factor in everywhere you've already been on your map.</p>
+
+      <!-- Q1: Vacation type -->
+      <div class="q-block" id="qb1">
+        <div class="q-header"><div class="q-num">1</div><div class="q-text">What kind of vacation experience are you looking for?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q1" value="a"><span class="q-opt-label">Culture, food, drink, and hustle &amp; bustle<em>City life, markets, restaurants, museums</em></span></label>
+          <label class="q-opt"><input type="radio" name="q1" value="b"><span class="q-opt-label">Parties lasting through the night<em>Nightlife, clubs, festivals, live music</em></span></label>
+          <label class="q-opt"><input type="radio" name="q1" value="c"><span class="q-opt-label">Meditation and calm<em>Quiet retreats, nature, slow pace, minimal crowds</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q2: Familiarity -->
+      <div class="q-block" id="qb2">
+        <div class="q-header"><div class="q-num">2</div><div class="q-text">How well-known do you want your destination to be?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q2" value="a"><span class="q-opt-label">Tried and true<em>World-famous destinations everyone knows and loves</em></span></label>
+          <label class="q-opt"><input type="radio" name="q2" value="b"><span class="q-opt-label">Off the beaten path<em>Lesser-known, but not far from familiar territory</em></span></label>
+          <label class="q-opt"><input type="radio" name="q2" value="c"><span class="q-opt-label">Nowhere near the beaten path<em>Truly off-the-radar — where few tourists venture</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q3: Travel companions -->
+      <div class="q-block" id="qb3">
+        <div class="q-header"><div class="q-num">3</div><div class="q-text">Who are you traveling with?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q3" value="a"><span class="q-opt-label">Traveling alone<em>Solo adventure</em></span></label>
+          <label class="q-opt"><input type="radio" name="q3" value="b"><span class="q-opt-label">With friend(s)<em>A group ready to explore together — and split up when needed</em></span></label>
+          <label class="q-opt"><input type="radio" name="q3" value="c"><span class="q-opt-label">With my partner<em>A couple's getaway</em></span></label>
+          <label class="q-opt"><input type="radio" name="q3" value="d"><span class="q-opt-label">With my children<em>A family trip</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q4: Children ages (conditional — Q3 = d) -->
+      <div class="q-block hidden" id="qb4">
+        <div class="q-header"><div class="q-num">4</div><div class="q-text">Are your children 18 or older?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q4" value="a"><span class="q-opt-label">Yes, they are all adults (18+)</span></label>
+          <label class="q-opt"><input type="radio" name="q4" value="b"><span class="q-opt-label">No — at least some are under 18<em>We'll keep recommendations family-appropriate</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q5: Under 13 (conditional — Q4 = b) -->
+      <div class="q-block hidden" id="qb5">
+        <div class="q-header"><div class="q-num">5</div><div class="q-text">Are any of your children under 13 years old?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q5" value="a"><span class="q-opt-label">Yes, at least one is under 13<em>We'll avoid destinations centered on long hikes or strenuous outdoor activities</em></span></label>
+          <label class="q-opt"><input type="radio" name="q5" value="b"><span class="q-opt-label">No, they are all between 13–17<em>Outdoor and active destinations are fine</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q6: Departure city -->
+      <div class="q-block" id="qb6">
+        <div class="q-header"><div class="q-num">6</div><div class="q-text">From what city will you be departing?</div></div>
+        <input class="q-text-input" type="text" id="q6-city" placeholder="e.g. Chicago, IL  or  Austin, TX" autocomplete="off" />
+      </div>
+
+      <!-- Q7: Flight duration -->
+      <div class="q-block" id="qb7">
+        <div class="q-header"><div class="q-num">7</div><div class="q-text">How long of a flight are you willing to take?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q7" value="a"><span class="q-opt-label">Less than 3 hours</span></label>
+          <label class="q-opt"><input type="radio" name="q7" value="b"><span class="q-opt-label">3–6 hours</span></label>
+          <label class="q-opt"><input type="radio" name="q7" value="c"><span class="q-opt-label">6–10 hours</span></label>
+          <label class="q-opt"><input type="radio" name="q7" value="d"><span class="q-opt-label">10+ hours<em>Anywhere in the world is on the table</em></span></label>
+          <label class="q-opt"><input type="radio" name="q7" value="e"><span class="q-opt-label">I'd prefer to drive<em>No flying — we'll ask how long next</em></span></label>
+        </div>
+      </div>
+
+      <!-- Q8: Trip duration for drive (conditional — Q7 = e) -->
+      <div class="q-block hidden" id="qb8">
+        <div class="q-header"><div class="q-num">8</div><div class="q-text">How long do you want to travel for?</div></div>
+        <div class="q-options">
+          <label class="q-opt"><input type="radio" name="q8" value="a"><span class="q-opt-label">Just a few days<em>We'll limit destinations to a 5-hour drive from home</em></span></label>
+          <label class="q-opt"><input type="radio" name="q8" value="b"><span class="q-opt-label">About a week<em>Up to a 10-hour drive from home</em></span></label>
+          <label class="q-opt"><input type="radio" name="q8" value="c"><span class="q-opt-label">Between one and two weeks<em>Up to a 15-hour drive from home</em></span></label>
+          <label class="q-opt"><input type="radio" name="q8" value="d"><span class="q-opt-label">Two weeks or more<em>Up to a 30-hour drive from home</em></span></label>
+        </div>
+      </div>
+
+      <!-- Submit button -->
+      <div id="rec-submit-row">
+        <button class="btn btn-primary" id="rec-submit" onclick="submitRec()" disabled>Find my destinations →</button>
+        <span id="rec-submit-note">Answer all the questions above to unlock your recommendations</span>
+      </div>
+
+      <!-- Loading state -->
+      <div id="rec-loading">
+        <div class="rec-plane">✈</div>
+        <p>Searching for your perfect destinations…</p>
+        <p style="font-size:12px">Checking travel advisories, flight times, and your travel map…</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="rec-error"></div>
+
+      <!-- Results -->
+      <div id="rec-results">
+        <h3>Your recommended destinations</h3>
+        <p class="res-meta" id="rec-res-meta"></p>
+        <div class="rec-cards" id="rec-cards"></div>
+        <div id="rec-again">
+          <button class="btn btn-ghost" onclick="resetRec()">← Start over with new answers</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Country modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title">Country</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;font-weight:500">How do you feel about this country?</div>
+        <div class="status-grid">
+          <button class="sbtn sbtn-blue"   data-s="blue"   onclick="selectStatus('blue')">  <span class="dot dot-blue"></span>   Not visited</button>
+          <button class="sbtn sbtn-green"  data-s="green"  onclick="selectStatus('green')"> <span class="dot dot-green"></span>  Want to return</button>
+          <button class="sbtn sbtn-yellow" data-s="yellow" onclick="selectStatus('yellow')"><span class="dot dot-yellow"></span> Undecided</button>
+          <button class="sbtn sbtn-red"    data-s="red"    onclick="selectStatus('red')">   <span class="dot dot-red"></span>   Won't return</button>
+        </div>
+      </div>
+      <div id="detail-section" style="display:none">
+        <div class="field">
+          <label>Time spent in this country</label>
+          <select id="f-time">
+            <option value="">Select…</option>
+            <option>Less than a week</option>
+            <option>1–2 weeks</option>
+            <option>2–4 weeks</option>
+            <option>1–3 months</option>
+            <option>3–6 months</option>
+            <option>6+ months</option>
+          </select>
+        </div>
+        <div class="field">
+          <label style="margin-bottom:6px">Explored beyond the capital?</label>
+          <div class="toggle-wrap">
+            <button class="toggle" id="f-outside" aria-pressed="false" onclick="toggleOutside()"></button>
+            <span id="outside-label" style="font-size:13px;color:var(--ink2)">Capital only</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes <span style="font-weight:400;color:var(--ink3)">(optional)</span></label>
+          <input type="text" id="f-notes" placeholder="e.g. Visited in 2022, loved the food…" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCountry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="destinations.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script type="module">
+  import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const fbApp = initializeApp(firebaseConfig);
+  const auth  = getAuth(fbApp);
+  const db    = getFirestore(fbApp);
+
+  let uid = null, travelData = {}, allCountries = [];
+  let currentCountry = null, currentStatus = 'blue', saveTimer = null;
+  let liveDestinations = []; // loaded from Firestore, falls back to static file
+
+  const COLORS = { blue:'#85B7EB', green:'#97C459', yellow:'#EF9F27', red:'#F09595' };
+  const STATUS_LABELS = { blue:'Not visited', green:'Want to return', yellow:'Undecided', red:"Won't return" };
+
+  // ── Auth ────────────────────────────────────────────────────
+  onAuthStateChanged(auth, async user => {
+    if (!user) { window.location.href = 'auth.html'; return; }
+    if (user.email === ADMIN_EMAIL) { window.location.href = 'admin.html'; return; }
+    uid = user.uid;
+    document.getElementById('nav-avatar').textContent = (user.displayName || user.email || '?').slice(0,2).toUpperCase();
+    document.getElementById('nav-name').textContent   = user.displayName || user.email;
+    await Promise.all([loadData(), loadDestinations()]);
+    initMap();
+  });
+  document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
+
+  // ── Firestore ───────────────────────────────────────────────
+  async function loadData() {
+    const snap = await getDoc(doc(db, 'users', uid));
+    travelData = snap.exists() ? (snap.data().countries || {}) : {};
+  }
+  async function loadDestinations() {
+    try {
+      const snap = await getDocs(collection(db, 'destinations'));
+      if (!snap.empty) {
+        liveDestinations = [];
+        snap.forEach(d => liveDestinations.push({ id: d.id, ...d.data() }));
+        return;
+      }
+    } catch(e) { /* fall through to static file */ }
+    // Fallback to statically loaded DESTINATIONS from destinations.js
+    liveDestinations = typeof DESTINATIONS !== 'undefined' ? DESTINATIONS : [];
+  }
+  async function saveData() {
+    document.getElementById('save-status').textContent = 'Saving…';
+    await setDoc(doc(db, 'users', uid), { countries: travelData }, { merge: true });
+    document.getElementById('save-status').textContent = 'Saved ✓';
+    setTimeout(() => document.getElementById('save-status').textContent = '', 2000);
+  }
+  function debounceSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveData, 800); }
+
+  // ── Tab switching ───────────────────────────────────────────
+  window.switchTab = function(tab) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + tab).classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+  };
+
+  // ── Map ─────────────────────────────────────────────────────
+  function getStatus(n) { return travelData[n]?.status || 'blue'; }
+  function colorOf(n)   { return COLORS[getStatus(n)]; }
+
+  function updateStats() {
+    const c = {blue:0,green:0,yellow:0,red:0};
+    allCountries.forEach(n => c[getStatus(n)]++);
+    ['blue','green','yellow','red'].forEach(k =>
+      document.getElementById('s-'+k).textContent = c[k]);
+  }
+
+  function renderList() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const list = document.getElementById('country-list');
+    list.innerHTML = allCountries
+      .filter(n => !q || n.toLowerCase().includes(q))
+      .map(n => `<div class="country-item${currentCountry===n?' active':''}" data-name="${n}">
+        <span class="dot dot-${getStatus(n)}"></span>
+        <span class="country-name">${n}</span>
+      </div>`).join('');
+    list.querySelectorAll('.country-item').forEach(el =>
+      el.addEventListener('click', () => openModal(el.dataset.name)));
+  }
+
+  function initMap() {
+    const wrap = document.getElementById('map-svg-wrap');
+    const W = wrap.clientWidth || 900, H = wrap.clientHeight || 500;
+    const svg = d3.select('#map-svg-wrap').append('svg')
+      .attr('viewBox', `0 0 ${W} ${H}`).attr('preserveAspectRatio','xMidYMid meet');
+    const proj = d3.geoNaturalEarth1().scale(W/6.2).translate([W/2, H/2]);
+    const pg   = d3.geoPath(proj);
+    const tip  = document.getElementById('tooltip');
+
+    d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(world => {
+      document.getElementById('map-loader').style.display = 'none';
+      const features = topojson.feature(world, world.objects.countries).features;
+      allCountries = features.map(f => f.properties.name).filter(Boolean).sort();
+
+      svg.selectAll('.country-path')
+        .data(features.filter(f => f.properties.name))
+        .join('path').attr('class','country-path')
+        .attr('d', pg).attr('fill', d => colorOf(d.properties.name))
+        .on('mousemove', (evt,d) => {
+          const nm = d.properties.name, info = travelData[nm], s = getStatus(nm);
+          let html = `<strong>${nm}</strong>${STATUS_LABELS[s]}`;
+          if (info?.time) html += `<br>${info.time}`;
+          if (info?.outside) html += `<br>Explored beyond capital`;
+          if (info?.notes) html += `<br><em style="color:var(--ink3)">${info.notes}</em>`;
+          const r = wrap.getBoundingClientRect();
+          tip.innerHTML = html; tip.style.display = 'block';
+          tip.style.left = Math.min(evt.clientX-r.left+12, r.width-210)+'px';
+          tip.style.top  = Math.min(evt.clientY-r.top+12,  r.height-100)+'px';
+        })
+        .on('mouseleave', () => tip.style.display = 'none')
+        .on('click', (_,d) => { if (d.properties.name) openModal(d.properties.name); });
+
+      updateStats(); renderList();
+    });
+  }
+
+  function updateMapColors() {
+    d3.selectAll('.country-path').attr('fill', d => colorOf(d.properties.name));
+  }
+
+  // ── Map modal ───────────────────────────────────────────────
+  window.openModal = function(name) {
+    currentCountry = name;
+    const d = travelData[name] || {};
+    currentStatus  = d.status || 'blue';
+    document.getElementById('modal-title').textContent = name;
+    document.querySelectorAll('.sbtn').forEach(b =>
+      b.classList.toggle('active', b.dataset.s === currentStatus));
+    showDetailIf();
+    document.getElementById('f-time').value = d.time || '';
+    const tog = document.getElementById('f-outside');
+    tog.classList.toggle('on', !!d.outside);
+    tog.setAttribute('aria-pressed', !!d.outside);
+    document.getElementById('outside-label').textContent = d.outside ? 'Yes, explored beyond capital' : 'Capital only';
+    document.getElementById('f-notes').value = d.notes || '';
+    document.getElementById('modal').classList.add('open');
+  };
+  window.closeModal = function() {
+    currentCountry = null;
+    document.getElementById('modal').classList.remove('open');
+    renderList();
+  };
+  window.selectStatus = function(s) {
+    currentStatus = s;
+    document.querySelectorAll('.sbtn').forEach(b => b.classList.toggle('active', b.dataset.s === s));
+    showDetailIf();
+  };
+  function showDetailIf() {
+    document.getElementById('detail-section').style.display =
+      (currentStatus === 'green' || currentStatus === 'yellow') ? 'flex' : 'none';
+  }
+  window.toggleOutside = function() {
+    const tog = document.getElementById('f-outside');
+    const on  = !tog.classList.contains('on');
+    tog.classList.toggle('on', on); tog.setAttribute('aria-pressed', on);
+    document.getElementById('outside-label').textContent = on ? 'Yes, explored beyond capital' : 'Capital only';
+  };
+  window.saveCountry = function() {
+    if (!currentCountry) return;
+    const needsDetail = currentStatus === 'green' || currentStatus === 'yellow';
+    if (currentStatus === 'blue') { delete travelData[currentCountry]; }
+    else {
+      travelData[currentCountry] = {
+        status:  currentStatus,
+        time:    needsDetail ? document.getElementById('f-time').value : '',
+        outside: needsDetail ? document.getElementById('f-outside').classList.contains('on') : false,
+        notes:   document.getElementById('f-notes').value.trim()
+      };
+    }
+    updateMapColors(); updateStats(); debounceSave(); closeModal();
+  };
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  document.getElementById('search').addEventListener('input', renderList);
+
+  // ═══════════════════════════════════════════════════════════
+  //  TRIP RECOMMENDER — database-driven, no AI required
+  // ═══════════════════════════════════════════════════════════
+
+  function getRadio(name) {
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : null;
+  }
+
+  // Show/hide conditional questions
+  function updateConditionals() {
+    const q3 = getRadio('q3');
+    const q4 = getRadio('q4');
+    const q7 = getRadio('q7');
+
+    const showQ4 = q3 === 'd';
+    document.getElementById('qb4').classList.toggle('hidden', !showQ4);
+    if (!showQ4) document.querySelectorAll('input[name="q4"]').forEach(r => { r.checked = false; r.closest('.q-opt').classList.remove('selected'); });
+
+    const showQ5 = showQ4 && q4 === 'b';
+    document.getElementById('qb5').classList.toggle('hidden', !showQ5);
+    if (!showQ5) document.querySelectorAll('input[name="q5"]').forEach(r => { r.checked = false; r.closest('.q-opt').classList.remove('selected'); });
+
+    const showQ8 = q7 === 'e';
+    document.getElementById('qb8').classList.toggle('hidden', !showQ8);
+    if (!showQ8) document.querySelectorAll('input[name="q8"]').forEach(r => { r.checked = false; r.closest('.q-opt').classList.remove('selected'); });
+
+    checkReady();
+  }
+
+  function checkReady() {
+    const q1 = getRadio('q1'), q2 = getRadio('q2'), q3 = getRadio('q3');
+    const q4 = getRadio('q4'), q5 = getRadio('q5');
+    const q6 = document.getElementById('q6-city').value.trim();
+    const q7 = getRadio('q7'), q8 = getRadio('q8');
+
+    let ready = !!(q1 && q2 && q3 && q6 && q7);
+    if (q3 === 'd')                ready = ready && !!q4;
+    if (q3 === 'd' && q4 === 'b') ready = ready && !!q5;
+    if (q7 === 'e')                ready = ready && !!q8;
+
+    document.getElementById('rec-submit').disabled = !ready;
+    document.getElementById('rec-submit-note').textContent = ready
+      ? 'All set — click above to get your recommendations!'
+      : 'Answer all the questions above to unlock your recommendations';
+  }
+
+  // Wire up radio buttons
+  document.querySelectorAll('#panel-rec input[type=radio]').forEach(r => {
+    r.addEventListener('change', () => {
+      const name = r.getAttribute('name');
+      document.querySelectorAll(`input[name="${name}"]`).forEach(x =>
+        x.closest('.q-opt').classList.toggle('selected', x.checked));
+      updateConditionals();
+    });
+  });
+  document.getElementById('q6-city').addEventListener('input', checkReady);
+
+  // ── Departure region detection ────────────────────────────
+  // Maps city/state keywords to a region code.
+  // Regions: NE=Northeast, SE=Southeast, MW=Midwest, SC=South Central, W=West, SW=Southwest, NW=Northwest, IN=International
+  const REGION_MAP = [
+    // Northeast
+    { region:'NE', keys:['new york','nyc','boston','philadelphia','philly','washington dc','washington, dc','baltimore','newark','hartford','providence','portland, me','buffalo','albany','pittsburgh','newark'] },
+    // Southeast
+    { region:'SE', keys:['miami','orlando','tampa','atlanta','charlotte','raleigh','jacksonville','savannah','new orleans','nashville','memphis','richmond','norfolk','charleston','greenville','birmingham','knoxville','louisville'] },
+    // Midwest
+    { region:'MW', keys:['chicago','detroit','cleveland','columbus','cincinnati','indianapolis','milwaukee','minneapolis','st. louis','saint louis','kansas city','omaha','des moines','grand rapids'] },
+    // South Central
+    { region:'SC', keys:['dallas','houston','austin','san antonio','oklahoma city','tulsa','little rock','baton rouge','jackson, ms'] },
+    // Southwest
+    { region:'SW', keys:['phoenix','las vegas','albuquerque','tucson','denver','salt lake city','el paso','santa fe','cheyenne','casper','laramie','colorado springs','boulder','fort collins','provo','ogden','reno','flagstaff'] },
+    // West Coast
+    { region:'W',  keys:['los angeles','la,','san francisco','seattle','san diego','portland, or','sacramento','san jose','oakland','long beach','anaheim','fresno','vancouver, bc','calgary','anchorage','honolulu','hawaii'] },
+    // Northwest / Mountain
+    { region:'NW', keys:['boise','spokane','billings','missoula','helena','great falls'] },
+  ];
+
+  function detectRegion(cityInput) {
+    const c = cityInput.toLowerCase();
+    for (const r of REGION_MAP) {
+      if (r.keys.some(k => c.includes(k))) return r.region;
+    }
+    // Default guess based on common state abbreviations
+    if (/\b(ca|or|wa|nv|ak|hi)\b/.test(c)) return 'W';
+    if (/\b(tx|ok|ar|la|ms)\b/.test(c)) return 'SC';
+    if (/\b(co|nm|wy|ut|az|id|mt)\b/.test(c)) return 'SW';
+    if (/\b(mn|wi|il|mi|oh|in|mo|ks|ne|ia|nd|sd)\b/.test(c)) return 'MW';
+    if (/\b(fl|ga|sc|nc|tn|al|ky|va|wv)\b/.test(c)) return 'SE';
+    if (/\b(ny|nj|pa|ct|ma|ri|nh|vt|me|md|de|dc)\b/.test(c)) return 'NE';
+    return 'MW'; // fallback to Midwest (central US) if unknown
+  }
+
+  // ── Per-region flight hour adjustments ───────────────────
+  // Each destination has a base flightHours from US East Coast.
+  // These offsets adjust for other departure regions (negative = shorter, positive = longer).
+  // Format: { regionCode: hourOffset }
+  const REGION_OFFSETS = {
+    // Europe: longer from West Coast, shorter from NE
+    'europe': { NE:-0.5, SE:0.5, MW:0.5, SC:1, SW:1.5, W:2, NW:2 },
+    // Caribbean/Latin America: shorter from SE/SC, longer from W
+    'caribbean': { NE:0, SE:-1, MW:0.5, SC:-0.5, SW:0.5, W:1.5, NW:2 },
+    // Asia: shorter from W, much longer from NE
+    'asia': { NE:1, SE:1.5, MW:0.5, SC:1, SW:-0.5, W:-2, NW:-1.5 },
+    // Middle East: similar everywhere, slightly longer from W
+    'mideast': { NE:0, SE:0.5, MW:0.5, SC:1, SW:1, W:2, NW:2 },
+    // Africa: slightly shorter from SE/NE
+    'africa': { NE:-0.5, SE:0, MW:0.5, SC:1, SW:1.5, W:2, NW:2 },
+    // Oceania: much shorter from W
+    'oceania': { NE:1, SE:1.5, MW:0.5, SC:1, SW:0, W:-3, NW:-2.5 },
+    // North America domestic: shorter from closer regions
+    'namerica': { NE:0, SE:0, MW:0, SC:0, SW:0, W:0, NW:0 },
+  };
+
+  // Assign each destination a world region for offset lookup
+  function getWorldRegion(d) {
+    const country = (d.country || '').toLowerCase();
+    const name = (d.name || '').toLowerCase();
+    // Oceania
+    if (['australia','new zealand','fiji','papua new guinea'].includes(country)) return 'oceania';
+    // Asia
+    if (['japan','thailand','indonesia','singapore','malaysia','laos','vietnam','south korea','taiwan','maldives','sri lanka','india','china','cambodia','myanmar','philippines'].includes(country)) return 'asia';
+    // Middle East
+    if (['united arab emirates','jordan','oman','israel','qatar','bahrain','kuwait','saudi arabia'].includes(country)) return 'mideast';
+    // Africa
+    if (['morocco','south africa','kenya','tanzania','rwanda','mauritius','egypt','ethiopia','ghana','senegal'].includes(country)) return 'africa';
+    // Caribbean / Latin America
+    if (['puerto rico','barbados','saint lucia','trinidad and tobago','colombia','mexico','peru','argentina','brazil','chile','uruguay','cuba','jamaica','bahamas','cayman islands','costa rica','panama','belize','guatemala'].includes(country)) return 'caribbean';
+    // Europe
+    if (['portugal','spain','italy','croatia','netherlands','denmark','iceland','czech republic','slovenia','greece','estonia','austria','united kingdom','ireland','belgium','switzerland','france','germany','sweden','norway','finland','poland','hungary'].includes(country)) return 'europe';
+    // North America domestic
+    if (['united states','canada'].includes(country)) return 'namerica';
+    return 'namerica'; // fallback
+  }
+
+  // ── Geocode a city using Nominatim (OpenStreetMap) ────────
+  async function geocodeCity(cityName) {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName)}&format=json&limit=1&countrycodes=us,ca`;
+    const resp = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await resp.json();
+    if (data && data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    return null;
+  }
+
+  // ── Get drive time in hours using OSRM (free, no key needed) ─
+  async function getDriveHours(fromLat, fromLng, toLat, toLng) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=false`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.code === 'Ok' && data.routes && data.routes[0]) {
+      return data.routes[0].duration / 3600; // seconds to hours
+    }
+    return 999; // unreachable
+  }
+  const FLIGHT_MAX = { a: 4, b: 7, c: 11, d: 999, e: 999 };
+  const LAYOVER_BUFFER = 2.5;
+  const DRIVE_MAX = { a: 5, b: 10, c: 15, d: 30 };
+
+  // ── Main filter function ───────────────────────────────────
+  function filterDestinations(originCoords) {
+    const q1 = getRadio('q1');
+    const q2 = getRadio('q2');
+    const q3 = getRadio('q3');
+    const q4 = getRadio('q4');
+    const q5 = getRadio('q5');
+    const q7 = getRadio('q7');
+    const q8 = getRadio('q8');
+    const q6 = document.getElementById('q6-city').value.trim();
+
+    const region = detectRegion(q6);
+
+    const wontReturn = new Set(
+      Object.entries(travelData).filter(([,v]) => v.status === 'red').map(([k]) => k)
+    );
+    const visitedCountries = new Set(
+      Object.entries(travelData).filter(([,v]) => v.status && v.status !== 'blue').map(([k]) => k)
+    );
+
+    const vibeFilter = { a: 'culture', b: 'nightlife', c: 'calm' }[q1];
+    const famFilter  = { a: 'famous', b: 'offbeat', c: 'hidden' }[q2];
+
+    let results = liveDestinations.filter(d => {
+      if (d.advisoryLevel > 2) return false;
+      if (wontReturn.has(d.country)) return false;
+      if (d.vibe !== vibeFilter) return false;
+      if (d.familiarity !== famFilter) return false;
+
+      if (q3 === 'a' && !d.goodForSolo)    return false;
+      if (q3 === 'b' && !d.goodForGroups)  return false;
+      if (q3 === 'c' && !d.goodForCouples) return false;
+      if (q3 === 'd') {
+        if (!d.goodForFamilies) return false;
+        if (q4 === 'b' && d.vibe === 'nightlife') return false;
+        if (q4 === 'b' && q5 === 'a' && !d.goodForYoungKids) return false;
+      }
+
+      if (q7 === 'e') {
+        if (!d.driveFromUS) return false;
+        const maxDrive = DRIVE_MAX[q8] || 30;
+        // Use real OSRM drive time if calculated, otherwise fall back to regional estimate
+        const realDriveHours = d._realDriveHours;
+        const fallbackHours  = d.driveHours ? (d.driveHours[region] || d.driveHours['MW'] || 999) : 999;
+        const driveTime = (realDriveHours !== undefined && realDriveHours < 900) ? realDriveHours : fallbackHours;
+        if (driveTime > maxDrive) return false;
+      } else {
+        const maxFlight = FLIGHT_MAX[q7] || 999;
+        // Less than 3hrs = direct only
+        if (q7 === 'a' && d.directFlight === false) return false;
+        // Get base flight hours and apply region offset
+        const worldRegion = getWorldRegion(d);
+        const offsets = REGION_OFFSETS[worldRegion] || {};
+        const regionOffset = offsets[region] || 0;
+        const baseHours = d.flightHours || 0;
+        const adjustedHours = baseHours + regionOffset;
+        // Add layover buffer for connecting flights
+        const effectiveHours = d.directFlight === false
+          ? adjustedHours + LAYOVER_BUFFER
+          : adjustedHours;
+        if (effectiveHours > maxFlight) return false;
+      }
+
+      return true;
+    });
+
+    results = results.sort(() => Math.random() - 0.5);
+    results = results.map(d => {
+      const out = { ...d, alreadyVisited: visitedCountries.has(d.country) };
+      delete out._realDriveHours; // clean up temp field
+      return out;
+    });
+    return results.slice(0, 3);
+  }
+
+  window.submitRec = async function() {
+    document.getElementById('rec-submit-row').style.display = 'none';
+    document.getElementById('rec-loading').style.display    = 'flex';
+    document.getElementById('rec-error').style.display      = 'none';
+    document.getElementById('rec-results').style.display    = 'none';
+    document.getElementById('rec-again').style.display      = 'none';
+
+    try {
+      const q7 = getRadio('q7');
+      const q8 = getRadio('q8');
+      const q6 = document.getElementById('q6-city').value.trim();
+      let originCoords = null;
+
+      if (q7 === 'e') {
+        // Geocode the departure city
+        originCoords = await geocodeCity(q6);
+        if (!originCoords) {
+          document.getElementById('rec-loading').style.display = 'none';
+          document.getElementById('rec-error').style.display   = 'block';
+          document.getElementById('rec-error').innerHTML = `<strong>Couldn't find "${q6}".</strong> Try being more specific, e.g. "Cheyenne, WY" or "Chicago, IL".`;
+          document.getElementById('rec-submit-row').style.display = 'flex';
+          return;
+        }
+
+        // Get drive times to all driveable destinations in parallel
+        const maxDrive = DRIVE_MAX[q8] || 30;
+        const driveDestinations = liveDestinations.filter(d => d.driveFromUS && d.driveLat);
+        const driveTimes = await Promise.all(
+          driveDestinations.map(d => getDriveHours(originCoords.lat, originCoords.lng, d.driveLat, d.driveLng))
+        );
+        // Store drive times on each destination temporarily
+        driveDestinations.forEach((d, i) => { d._realDriveHours = driveTimes[i]; });
+      }
+
+      const recs = filterDestinations(originCoords);
+      if (recs.length === 0) {
+        document.getElementById('rec-loading').style.display = 'none';
+        document.getElementById('rec-error').style.display   = 'block';
+        document.getElementById('rec-error').innerHTML =
+          '<strong>No destinations matched your criteria.</strong> Try broadening your answers — for example, allowing a longer flight time or drive, or choosing a more well-known destination type.';
+        document.getElementById('rec-submit-row').style.display = 'flex';
+      } else {
+        renderResults(recs);
+      }
+    } catch(e) {
+      console.error(e);
+      document.getElementById('rec-loading').style.display = 'none';
+      document.getElementById('rec-error').style.display   = 'block';
+      document.getElementById('rec-error').textContent     = 'Something went wrong. Please try again.';
+      document.getElementById('rec-submit-row').style.display = 'flex';
+    }
+  };
+
+  const RANK_LABELS  = ['⭐ Top Pick', '✦ Great Option', '◆ Also Consider'];
+  const RANK_CLASSES = ['rank-1', 'rank-2', 'rank-3'];
+  const ADVISORY_LABELS = { 1: 'Exercise Normal Precautions', 2: 'Exercise Increased Caution' };
+
+  function renderResults(recs) {
+    document.getElementById('rec-loading').style.display = 'none';
+    document.getElementById('rec-results').style.display = 'block';
+    document.getElementById('rec-again').style.display   = 'block';
+
+    const city = document.getElementById('q6-city').value.trim();
+    document.getElementById('rec-res-meta').textContent =
+      `Departing ${city} · ${recs.length} destination${recs.length !== 1 ? 's' : ''} matched your profile · All Level 1 or 2 advisory`;
+
+    document.getElementById('rec-cards').innerHTML = recs.map((r, i) => `
+      <div class="rec-card">
+        <div class="rec-card-top">
+          <div class="rec-card-rank-row">
+            <span class="rank-badge ${RANK_CLASSES[i] || 'rank-3'}">${RANK_LABELS[i] || 'Option'}</span>
+            <span class="advisory-badge">🛡 Level ${r.advisoryLevel} — ${ADVISORY_LABELS[r.advisoryLevel]}</span>
+          </div>
+          <div class="rec-card-name">${r.name}, ${r.country}</div>
+          <div class="rec-card-tagline">${r.description.split('.')[0]}.</div>
+          <div class="rec-card-body">${r.description}</div>
+          ${r.alreadyVisited ? `<div class="rec-visited-note">📍 You've visited ${r.country} before — but you haven't ruled it out!</div>` : ''}
+        </div>
+        <div class="rec-card-footer">
+          ${(r.tags || []).map(t => `<span class="rec-tag">${t}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.resetRec = function() {
+    document.querySelectorAll('#panel-rec input[type=radio]').forEach(r => {
+      r.checked = false; r.closest('.q-opt').classList.remove('selected');
+    });
+    document.getElementById('q6-city').value = '';
+    ['rec-results','rec-again','rec-error'].forEach(id =>
+      document.getElementById(id).style.display = 'none');
+    document.getElementById('rec-submit-row').style.display = 'flex';
+    ['qb4','qb5','qb8'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    checkReady();
+    document.getElementById('rec-scroll').scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+</script>
+</body>
+</html>
