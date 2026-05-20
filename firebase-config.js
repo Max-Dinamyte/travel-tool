@@ -1,5 +1,5 @@
 const firebaseConfig = {
-  apiKey:            "AIzaSyB9giaDmfO2lo3auvxt_YK1pJ0l9JVh3-o",
+  apiKey:            "AIzaSyCophdRYppxncBYImw9OHA2TZ0fur0ZfTU",
   authDomain:        "mdt-travel-app.firebaseapp.com",
   projectId:         "mdt-travel-app",
   storageBucket:     "mdt-travel-app.firebasestorage.app",
