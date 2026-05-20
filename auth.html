@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -82,6 +82,16 @@
   </div>
 
   <script src="firebase-config.js"></script>
+  <script>
+    // Tab switching — must be in a regular script (not module) for onclick to work
+    function switchTab(tab) {
+      document.getElementById('error-box').style.display = 'none';
+      document.getElementById('form-signin').style.display = tab === 'signin' ? 'flex' : 'none';
+      document.getElementById('form-signup').style.display = tab === 'signup' ? 'flex' : 'none';
+      document.getElementById('tab-signin').classList.toggle('active', tab === 'signin');
+      document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+    }
+  </script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -104,14 +114,6 @@
       box.style.display = 'block';
     }
     function clearError() { document.getElementById('error-box').style.display = 'none'; }
-
-    window.switchTab = function(tab) {
-      clearError();
-      document.getElementById('form-signin').style.display = tab === 'signin' ? 'flex' : 'none';
-      document.getElementById('form-signup').style.display = tab === 'signup' ? 'flex' : 'none';
-      document.getElementById('tab-signin').classList.toggle('active', tab === 'signin');
-      document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
-    };
 
     window.signInWithGoogle = async function() {
       clearError();
