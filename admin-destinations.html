@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Destination Manager — Max Dinamyte Travel</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { overflow: auto; }
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+    #content { flex: 1; padding: 24px 28px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 22px; }
+    .page-header p { font-size: 13px; color: var(--ink3); margin-top: 3px; }
+
+    /* Filters */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .filter-bar input { max-width: 220px; font-size: 13px; }
+    .filter-bar select { padding: 8px 10px; font-size: 13px; border: 1px solid var(--border2); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+    .count-label { font-size: 13px; color: var(--ink3); margin-left: auto; }
+
+    /* Destination table */
+    .dest-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dest-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ink3); padding: 8px 12px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .dest-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .dest-table tr:hover td { background: var(--bg); }
+    .dest-table tr:last-child td { border-bottom: none; }
+    .dest-name { font-weight: 500; }
+    .dest-desc { font-size: 12px; color: var(--ink3); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag-sm { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--ink3); }
+    .bool-yes { color: var(--c-green); font-weight: 600; }
+    .bool-no  { color: var(--ink3); }
+    .action-btns { display: flex; gap: 6px; }
+
+    /* Modal form */
+    .modal-overlay { padding: 20px; }
+    .modal-box { width: 640px; max-width: 100%; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-full { grid-column: 1 / -1; }
+    .check-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .check-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+    .check-item input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+    .section-label { font-size: 11px; font-weight: 600; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    textarea { min-height: 80px; resize: vertical; font-family: var(--font); line-height: 1.5; }
+    .tags-input-wrap { position: relative; }
+    .tags-display { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .tag-chip { display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--bg-blue); color: var(--c-blue); border: 1px solid #B5D4F4; }
+    .tag-chip button { background: none; border: none; cursor: pointer; color: var(--c-blue); font-size: 14px; line-height: 1; padding: 0; }
+    .advisory-select option[value="1"] { color: green; }
+    .advisory-select option[value="2"] { color: orange; }
+    .advisory-select option[value="3"] { color: red; }
+
+    /* Delete confirm */
+    .delete-confirm { background: #fee2e2; border: 1px solid #fca5a5; border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px; }
+    .delete-confirm p { font-size: 14px; color: #991b1b; }
+
+    /* Save status */
+    #save-banner { display: none; position: fixed; bottom: 20px; right: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; box-shadow: var(--shadow); font-size: 13px; z-index: 300; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 48px; color: var(--ink3); font-size: 14px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <nav class="nav">
+    <a class="nav-brand" href="#">✈ Max Dinamyte<span class="nav-brand-sub">Destinations</span></a>
+    <div class="nav-right">
+      <a href="index.html" class="btn btn-ghost btn-sm">← Back to app</a>
+      <button class="btn btn-ghost btn-sm" id="btn-signout">Sign out</button>
+    </div>
+  </nav>
+
+  <div id="content">
+    <div id="loader" class="loader-wrap" style="padding:4rem"><div class="spinner"></div><span>Loading…</span></div>
+
+    <div id="main-view" style="display:none">
+      <div class="page-header">
+        <div>
+          <h1>Destination Manager</h1>
+          <p>Add, edit, or remove destinations. Changes save instantly to Firestore and go live immediately.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add destination</button>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="filter-search" placeholder="Search destinations…" oninput="renderTable()" />
+        <select id="filter-vibe" onchange="renderTable()">
+          <option value="">All vibes</option>
+          <option value="culture">Culture</option>
+          <option value="nightlife">Nightlife</option>
+          <option value="calm">Calm</option>
+        </select>
+        <select id="filter-fam" onchange="renderTable()">
+          <option value="">All familiarity</option>
+          <option value="famous">Famous</option>
+          <option value="offbeat">Offbeat</option>
+          <option value="hidden">Hidden</option>
+        </select>
+        <select id="filter-advisory" onchange="renderTable()">
+          <option value="">All advisory levels</option>
+          <option value="1">Level 1</option>
+          <option value="2">Level 2</option>
+        </select>
+        <span class="count-label" id="count-label"></span>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table class="dest-table">
+          <thead>
+            <tr>
+              <th>Destination</th>
+              <th>Vibe</th>
+              <th>Familiarity</th>
+              <th>Advisory</th>
+              <th>Flight hrs</th>
+              <th>Solo</th>
+              <th>Groups</th>
+              <th>Couples</th>
+              <th>Families</th>
+              <th>Tags</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="dest-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <h3 id="modal-title">Add destination</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Destination name *</label>
+          <input type="text" id="f-name" placeholder="e.g. Lisbon" />
+        </div>
+        <div class="field">
+          <label>Country *</label>
+          <input type="text" id="f-country" placeholder="e.g. Portugal" />
+        </div>
+        <div class="field">
+          <label>Vibe *</label>
+          <select id="f-vibe">
+            <option value="">Select…</option>
+            <option value="culture">Culture, food & hustle</option>
+            <option value="nightlife">Nightlife & parties</option>
+            <option value="calm">Calm & relaxed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Familiarity *</label>
+          <select id="f-familiarity">
+            <option value="">Select…</option>
+            <option value="famous">Famous (tried & true)</option>
+            <option value="offbeat">Offbeat (lesser known)</option>
+            <option value="hidden">Hidden (off the radar)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>U.S. Advisory Level *</label>
+          <select id="f-advisory" class="advisory-select">
+            <option value="1">Level 1 — Normal Precautions</option>
+            <option value="2">Level 2 — Increased Caution</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Flight hours from US East Coast *</label>
+          <input type="number" id="f-flight" placeholder="e.g. 8" min="0" max="25" />
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="section-label">Good for…</div>
+        <div class="check-group">
+          <label class="check-item"><input type="checkbox" id="f-solo" /> Solo travelers</label>
+          <label class="check-item"><input type="checkbox" id="f-groups" /> Groups of friends</label>
+          <label class="check-item"><input type="checkbox" id="f-couples" /> Couples</label>
+          <label class="check-item"><input type="checkbox" id="f-families" /> Families with children</label>
+          <label class="check-item"><input type="checkbox" id="f-youngkids" /> Children under 13</label>
+          <label class="check-item"><input type="checkbox" id="f-drive" /> Driveable from US</label>
+        </div>
+      </div>
+
+      <div style="margin-top:16px" class="field">
+        <label>Description (2–3 sentences shown to clients) *</label>
+        <textarea id="f-desc" placeholder="Describe why this destination is special and what makes it unique…"></textarea>
+      </div>
+
+      <div style="margin-top:14px" class="field">
+        <label>Tags</label>
+        <input type="text" id="f-tag-input" placeholder="Type a tag and press Enter…" />
+        <div class="tags-display" id="tags-display"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-save-btn" onclick="saveDestination()">Save destination</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal-box" style="width:400px">
+    <div class="modal-header">
+      <h3>Delete destination</h3>
+      <button class="modal-close" onclick="closeDeleteModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="delete-confirm">
+        <p>Are you sure you want to delete <strong id="delete-name"></strong>? This cannot be undone.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Yes, delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="save-banner"></div>
+
+<script src="firebase-config.js"></script>
+<script type="module">
+  import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const fbApp = initializeApp(firebaseConfig);
+  const auth  = getAuth(fbApp);
+  const db    = getFirestore(fbApp);
+
+  let destinations = [];  // local working copy
+  let editingId    = null;
+  let deletingId   = null;
+  let currentTags  = [];
+
+  // ── Auth guard ──────────────────────────────────────────────
+  onAuthStateChanged(auth, async user => {
+    if (!user) { window.location.href = 'auth.html'; return; }
+    if (user.email !== ADMIN_EMAIL) { window.location.href = 'index.html'; return; }
+    await loadDestinations();
+  });
+  document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
+
+  // ── Load from Firestore (fallback to built-in JS file) ─────
+  async function loadDestinations() {
+    try {
+      const snap = await getDocs(collection(db, 'destinations'));
+      if (snap.empty) {
+        // First time — seed from destinations.js
+        await seedFromFile();
+      } else {
+        destinations = [];
+        snap.forEach(d => destinations.push({ id: d.id, ...d.data() }));
+        destinations.sort((a,b) => a.name.localeCompare(b.name));
+      }
+    } catch(e) {
+      console.error(e);
+      showBanner('Error loading destinations: ' + e.message, true);
+    }
+    document.getElementById('loader').style.display    = 'none';
+    document.getElementById('main-view').style.display = 'block';
+    renderTable();
+  }
+
+  async function seedFromFile() {
+    // DESTINATIONS comes from destinations.js loaded as a regular script
+    if (typeof DESTINATIONS === 'undefined') return;
+    for (const d of DESTINATIONS) {
+      const id = d.name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + d.country.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      await setDoc(doc(db, 'destinations', id), d);
+      destinations.push({ id, ...d });
+    }
+    destinations.sort((a,b) => a.name.localeCompare(b.name));
+  }
+
+  // ── Render table ────────────────────────────────────────────
+  window.renderTable = function() {
+    const q    = document.getElementById('filter-search').value.toLowerCase();
+    const vibe = document.getElementById('filter-vibe').value;
+    const fam  = document.getElementById('filter-fam').value;
+    const adv  = document.getElementById('filter-advisory').value;
+
+    const filtered = destinations.filter(d => {
+      if (q   && !d.name.toLowerCase().includes(q) && !d.country.toLowerCase().includes(q)) return false;
+      if (vibe && d.vibe !== vibe) return false;
+      if (fam  && d.familiarity !== fam) return false;
+      if (adv  && String(d.advisoryLevel) !== adv) return false;
+      return true;
+    });
+
+    document.getElementById('count-label').textContent = `${filtered.length} of ${destinations.length} destinations`;
+
+    const VIBE_LABELS = { culture:'🏛 Culture', nightlife:'🎉 Nightlife', calm:'🌿 Calm' };
+    const FAM_LABELS  = { famous:'⭐ Famous', offbeat:'🧭 Offbeat', hidden:'🔍 Hidden' };
+
+    const tbody = document.getElementById('dest-tbody');
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state">No destinations match your filters.</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map(d => `
+      <tr>
+        <td>
+          <div class="dest-name">${d.name}, ${d.country}</div>
+          <div class="dest-desc">${d.description || ''}</div>
+        </td>
+        <td>${VIBE_LABELS[d.vibe] || d.vibe}</td>
+        <td>${FAM_LABELS[d.familiarity] || d.familiarity}</td>
+        <td><span class="advisory-badge">L${d.advisoryLevel}</span></td>
+        <td>${d.flightHours || 0}h${d.driveFromUS ? ' 🚗' : ''}</td>
+        <td class="${d.goodForSolo    ? 'bool-yes':'bool-no'}">${d.goodForSolo    ? '✓':'–'}</td>
+        <td class="${d.goodForGroups  ? 'bool-yes':'bool-no'}">${d.goodForGroups  ? '✓':'–'}</td>
+        <td class="${d.goodForCouples ? 'bool-yes':'bool-no'}">${d.goodForCouples ? '✓':'–'}</td>
+        <td class="${d.goodForFamilies? 'bool-yes':'bool-no'}">${d.goodForFamilies? '✓':'–'}</td>
+        <td><div class="tag-list">${(d.tags||[]).map(t=>`<span class="tag-sm">${t}</span>`).join('')}</div></td>
+        <td>
+          <div class="action-btns">
+            <button class="btn btn-ghost btn-sm" onclick="openEditModal('${d.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${d.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  };
+
+  // ── Add / Edit modal ────────────────────────────────────────
+  window.openAddModal = function() {
+    editingId   = null;
+    currentTags = [];
+    document.getElementById('modal-title').textContent = 'Add destination';
+    document.getElementById('modal-save-btn').textContent = 'Add destination';
+    clearForm();
+    document.getElementById('modal').classList.add('open');
+  };
+
+  window.openEditModal = function(id) {
+    const d = destinations.find(x => x.id === id);
+    if (!d) return;
+    editingId   = id;
+    currentTags = [...(d.tags || [])];
+    document.getElementById('modal-title').textContent = `Edit — ${d.name}`;
+    document.getElementById('modal-save-btn').textContent = 'Save changes';
+    fillForm(d);
+    renderTags();
+    document.getElementById('modal').classList.add('open');
+  };
+
+  window.closeModal = function() {
+    document.getElementById('modal').classList.remove('open');
+    editingId = null;
+  };
+
+  function clearForm() {
+    ['f-name','f-country','f-flight','f-desc','f-tag-input'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-vibe').value = '';
+    document.getElementById('f-familiarity').value = '';
+    document.getElementById('f-advisory').value = '1';
+    ['f-solo','f-groups','f-couples','f-families','f-youngkids','f-drive'].forEach(id => document.getElementById(id).checked = false);
+    currentTags = [];
+    renderTags();
+  }
+
+  function fillForm(d) {
+    document.getElementById('f-name').value       = d.name || '';
+    document.getElementById('f-country').value    = d.country || '';
+    document.getElementById('f-vibe').value       = d.vibe || '';
+    document.getElementById('f-familiarity').value= d.familiarity || '';
+    document.getElementById('f-advisory').value   = String(d.advisoryLevel || 1);
+    document.getElementById('f-flight').value     = d.flightHours || 0;
+    document.getElementById('f-desc').value       = d.description || '';
+    document.getElementById('f-solo').checked     = !!d.goodForSolo;
+    document.getElementById('f-groups').checked   = !!d.goodForGroups;
+    document.getElementById('f-couples').checked  = !!d.goodForCouples;
+    document.getElementById('f-families').checked = !!d.goodForFamilies;
+    document.getElementById('f-youngkids').checked= !!d.goodForYoungKids;
+    document.getElementById('f-drive').checked    = !!d.driveFromUS;
+  }
+
+  // Tag input
+  document.getElementById('f-tag-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = e.target.value.trim().replace(/,$/, '');
+      if (val && !currentTags.includes(val)) { currentTags.push(val); renderTags(); }
+      e.target.value = '';
+    }
+  });
+
+  function renderTags() {
+    document.getElementById('tags-display').innerHTML = currentTags.map((t,i) => `
+      <span class="tag-chip">${t}<button onclick="removeTag(${i})" title="Remove">×</button></span>
+    `).join('');
+  }
+  window.removeTag = function(i) { currentTags.splice(i,1); renderTags(); };
+
+  // Save
+  window.saveDestination = async function() {
+    const name   = document.getElementById('f-name').value.trim();
+    const country= document.getElementById('f-country').value.trim();
+    const vibe   = document.getElementById('f-vibe').value;
+    const fam    = document.getElementById('f-familiarity').value;
+    const adv    = parseInt(document.getElementById('f-advisory').value);
+    const flight = parseFloat(document.getElementById('f-flight').value) || 0;
+    const desc   = document.getElementById('f-desc').value.trim();
+
+    if (!name || !country || !vibe || !fam || !desc) {
+      alert('Please fill in all required fields (marked with *).');
+      return;
+    }
+
+    const destData = {
+      name, country, vibe, familiarity: fam,
+      advisoryLevel: adv, flightHours: flight, description: desc,
+      tags: currentTags,
+      goodForSolo:     document.getElementById('f-solo').checked,
+      goodForGroups:   document.getElementById('f-groups').checked,
+      goodForCouples:  document.getElementById('f-couples').checked,
+      goodForFamilies: document.getElementById('f-families').checked,
+      goodForYoungKids:document.getElementById('f-youngkids').checked,
+      driveFromUS:     document.getElementById('f-drive').checked,
+    };
+
+    const id = editingId || (name.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + country.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + Date.now());
+
+    try {
+      document.getElementById('modal-save-btn').textContent = 'Saving…';
+      document.getElementById('modal-save-btn').disabled = true;
+      await setDoc(doc(db, 'destinations', id), destData);
+
+      // Update local array
+      const idx = destinations.findIndex(d => d.id === id);
+      if (idx >= 0) destinations[idx] = { id, ...destData };
+      else destinations.push({ id, ...destData });
+      destinations.sort((a,b) => a.name.localeCompare(b.name));
+
+      closeModal();
+      renderTable();
+      showBanner(editingId ? `✓ ${name} updated` : `✓ ${name} added`);
+    } catch(e) {
+      showBanner('Error saving: ' + e.message, true);
+    } finally {
+      document.getElementById('modal-save-btn').textContent = editingId ? 'Save changes' : 'Add destination';
+      document.getElementById('modal-save-btn').disabled = false;
+    }
+  };
+
+  // ── Delete ──────────────────────────────────────────────────
+  window.openDeleteModal = function(id) {
+    const d = destinations.find(x => x.id === id);
+    if (!d) return;
+    deletingId = id;
+    document.getElementById('delete-name').textContent = `${d.name}, ${d.country}`;
+    document.getElementById('delete-modal').classList.add('open');
+  };
+  window.closeDeleteModal = function() {
+    document.getElementById('delete-modal').classList.remove('open');
+    deletingId = null;
+  };
+  window.confirmDelete = async function() {
+    if (!deletingId) return;
+    try {
+      await deleteDoc(doc(db, 'destinations', deletingId));
+      destinations = destinations.filter(d => d.id !== deletingId);
+      closeDeleteModal();
+      renderTable();
+      showBanner('✓ Destination deleted');
+    } catch(e) {
+      showBanner('Error deleting: ' + e.message, true);
+    }
+  };
+
+  // Close modals on backdrop click
+  ['modal','delete-modal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+      if (e.target === e.currentTarget) {
+        if (id === 'modal') closeModal();
+        else closeDeleteModal();
+      }
+    });
+  });
+
+  // ── Banner ──────────────────────────────────────────────────
+  function showBanner(msg, isError = false) {
+    const b = document.getElementById('save-banner');
+    b.textContent = msg;
+    b.style.display = 'block';
+    b.style.color = isError ? '#991b1b' : var(--c-green);
+    b.style.color = isError ? '#991b1b' : '#166534';
+    setTimeout(() => b.style.display = 'none', 3000);
+  }
+</script>
+<!-- Load destinations.js so seeding works on first run -->
+<script src="destinations.js"></script>
+</body>
+</html>
