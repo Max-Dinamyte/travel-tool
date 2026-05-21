@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Max Dinamyte Travel</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+    #content { flex: 1; padding: 28px 32px; max-width: 1100px; margin: 0 auto; width: 100%; }
+    .page-title { margin-bottom: 6px; }
+    .page-sub { font-size: 14px; color: var(--ink3); margin-bottom: 24px; }
+
+    .stats-row { margin-bottom: 28px; }
+
+    /* Client table */
+    .client-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .client-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--ink3); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .client-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .client-table tr:last-child td { border-bottom: none; }
+    .client-table tr:hover td { background: var(--bg); }
+    .client-table tbody tr { cursor: pointer; }
+
+    /* Client detail panel */
+    #detail-panel { display: none; }
+    #detail-panel.open { display: block; }
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink3); cursor: pointer; border: none; background: none; font-family: var(--font); padding: 0; margin-bottom: 16px; }
+    .back-btn:hover { color: var(--ink); }
+    .client-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .client-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--bg-blue); color: var(--c-blue); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+    .client-meta h2 { font-size: 18px; }
+    .client-meta p  { font-size: 13px; color: var(--ink3); }
+
+    /* Map embed */
+    #client-map-wrap { position: relative; width: 100%; height: 420px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); margin-bottom: 20px; }
+    #client-map-wrap svg { width: 100%; height: 100%; }
+    .country-path-admin { stroke: #fff; stroke-width: 0.35; }
+
+    /* Country breakdown table */
+    .breakdown-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .breakdown-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--ink3); padding: 6px 10px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; }
+    .breakdown-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .breakdown-table tr:last-child td { border-bottom: none; }
+
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--ink3); }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    .filter-row { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+    .filter-row input { max-width: 240px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <nav class="nav">
+    <a class="nav-brand" href="#">✈ Max Dinamyte<span class="nav-brand-sub">Admin</span></a>
+    <div class="nav-right">
+      <div class="avatar" id="nav-avatar">M</div>
+      <button class="btn btn-ghost btn-sm" id="btn-signout">Sign out</button>
+    </div>
+  </nav>
+
+  <div id="content">
+    <div id="loader" class="loader-wrap" style="padding:4rem"><div class="spinner"></div><span>Loading clients…</span></div>
+
+    <!-- Client list view -->
+    <div id="list-view" style="display:none">
+      <h1 class="page-title">Client travel maps</h1>
+      <p class="page-sub" id="client-count-label"></p>
+
+      <div class="stats-row">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+          <div class="stat-card"><div class="n n-blue" id="total-blue">0</div><div class="l">Countries not yet visited</div></div>
+          <div class="stat-card"><div class="n n-green" id="total-green">0</div><div class="l">Want to return</div></div>
+          <div class="stat-card"><div class="n n-yellow" id="total-yellow">0</div><div class="l">Undecided</div></div>
+          <div class="stat-card"><div class="n n-red" id="total-red">0</div><div class="l">Won't return</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <div class="filter-row" style="padding:12px 16px 0">
+          <input type="text" id="client-search" placeholder="Search clients…" style="font-size:13px" />
+        </div>
+        <table class="client-table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Email</th>
+              <th style="text-align:center">Visited</th>
+              <th style="text-align:center">Return</th>
+              <th style="text-align:center">Undecided</th>
+              <th style="text-align:center">Won't return</th>
+              <th>Last active</th>
+            </tr>
+          </thead>
+          <tbody id="client-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Client detail view -->
+    <div id="detail-panel">
+      <button class="back-btn" onclick="showListView()">← Back to all clients</button>
+      <div class="client-header">
+        <div class="client-avatar" id="d-avatar"></div>
+        <div class="client-meta">
+          <h2 id="d-name"></h2>
+          <p id="d-email"></p>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+          <div class="stat-card"><div class="n n-green" id="d-green">0</div><div class="l">Want to return</div></div>
+          <div class="stat-card"><div class="n n-yellow" id="d-yellow">0</div><div class="l">Undecided</div></div>
+          <div class="stat-card"><div class="n n-red" id="d-red">0</div><div class="l">Won't return</div></div>
+          <div class="stat-card"><div class="n" id="d-total" style="color:var(--ink)">0</div><div class="l">Total tracked</div></div>
+        </div>
+      </div>
+      <div id="client-map-wrap">
+        <div class="loader-wrap" id="map-loader2"><div class="spinner"></div></div>
+      </div>
+      <div class="card" style="overflow:hidden">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:500;color:var(--ink2)">Country breakdown</div>
+        <table class="breakdown-table">
+          <thead><tr><th>Country</th><th>Status</th><th>Time spent</th><th>Beyond capital</th><th>Notes</th></tr></thead>
+          <tbody id="breakdown-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script type="module">
+  import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+
+  const COLORS = { blue:'#85B7EB', green:'#97C459', yellow:'#EF9F27', red:'#F09595' };
+  const STATUS_LABELS = { blue:'Not visited', green:'Want to return', yellow:'Undecided', red:"Won't return" };
+
+  let allClients = [];
+  let worldTopo  = null;
+
+  // ── Auth guard ──────────────────────────────────────────────
+  onAuthStateChanged(auth, async user => {
+    if (!user)                           { window.location.href = 'auth.html'; return; }
+    if (user.email !== ADMIN_EMAIL)      { window.location.href = 'index.html'; return; }
+    const initials = (user.displayName || user.email || 'M').slice(0,2).toUpperCase();
+    document.getElementById('nav-avatar').textContent = initials;
+    await loadClients();
+  });
+
+  document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
+
+  // ── Load all client data ────────────────────────────────────
+  async function loadClients() {
+    const snap = await getDocs(collection(db, 'users'));
+    allClients = [];
+    let totals = {green:0,yellow:0,red:0,blue:0};
+
+    snap.forEach(doc => {
+      const d = doc.data();
+      const countries = d.countries || {};
+      const counts = {green:0,yellow:0,red:0};
+      Object.values(countries).forEach(v => { if (v.status && v.status !== 'blue') counts[v.status]++; });
+      allClients.push({
+        uid: doc.id,
+        name:      d.displayName || d.email || doc.id,
+        email:     d.email || '',
+        countries,
+        counts,
+        lastActive: d.lastActive || null
+      });
+      totals.green  += counts.green;
+      totals.yellow += counts.yellow;
+      totals.red    += counts.red;
+    });
+
+    document.getElementById('total-green').textContent  = totals.green;
+    document.getElementById('total-yellow').textContent = totals.yellow;
+    document.getElementById('total-red').textContent    = totals.red;
+    document.getElementById('total-blue').textContent   = allClients.length;
+    document.getElementById('client-count-label').textContent = `${allClients.length} registered client${allClients.length !== 1 ? 's' : ''}`;
+
+    document.getElementById('loader').style.display    = 'none';
+    document.getElementById('list-view').style.display = 'block';
+    renderClientTable(allClients);
+
+    document.getElementById('client-search').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      renderClientTable(allClients.filter(c => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)));
+    });
+  }
+
+  function renderClientTable(clients) {
+    const tbody = document.getElementById('client-tbody');
+    if (clients.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">👥</div><p>No clients found.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = clients.map(c => `
+      <tr data-uid="${c.uid}">
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div class="avatar" style="width:28px;height:28px;font-size:11px">${c.name.slice(0,2).toUpperCase()}</div>
+          <span style="font-weight:500">${c.name}</span>
+        </div></td>
+        <td style="color:var(--ink3)">${c.email}</td>
+        <td style="text-align:center"><span class="pill pill-green">${c.counts.green}</span></td>
+        <td style="text-align:center"><span class="pill pill-yellow">${c.counts.yellow}</span></td>
+        <td style="text-align:center"><span class="pill pill-red">${c.counts.red}</span></td>
+        <td style="text-align:center">${Object.values(c.countries).filter(v=>v.status&&v.status!=='blue').length}</td>
+        <td style="color:var(--ink3);font-size:12px">${c.lastActive ? new Date(c.lastActive).toLocaleDateString() : '—'}</td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('tr[data-uid]').forEach(row => {
+      row.addEventListener('click', () => {
+        const client = allClients.find(c => c.uid === row.dataset.uid);
+        if (client) showClient(client);
+      });
+    });
+  }
+
+  // ── Client detail view ──────────────────────────────────────
+  async function showClient(client) {
+    document.getElementById('list-view').style.display   = 'none';
+    document.getElementById('detail-panel').style.display = 'block';
+    document.getElementById('detail-panel').classList.add('open');
+
+    document.getElementById('d-avatar').textContent = client.name.slice(0,2).toUpperCase();
+    document.getElementById('d-name').textContent   = client.name;
+    document.getElementById('d-email').textContent  = client.email;
+    document.getElementById('d-green').textContent  = client.counts.green;
+    document.getElementById('d-yellow').textContent = client.counts.yellow;
+    document.getElementById('d-red').textContent    = client.counts.red;
+    const total = Object.values(client.countries).filter(v=>v.status&&v.status!=='blue').length;
+    document.getElementById('d-total').textContent  = total;
+
+    // Breakdown table
+    const visited = Object.entries(client.countries)
+      .filter(([,v]) => v.status && v.status !== 'blue')
+      .sort(([a],[b]) => a.localeCompare(b));
+    const tbody = document.getElementById('breakdown-tbody');
+    if (visited.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:20px">No countries tracked yet.</td></tr>`;
+    } else {
+      tbody.innerHTML = visited.map(([name, v]) => `
+        <tr>
+          <td style="font-weight:500">${name}</td>
+          <td><span class="pill pill-${v.status}">${STATUS_LABELS[v.status]}</span></td>
+          <td>${v.time || '—'}</td>
+          <td>${v.outside ? '✓ Yes' : 'Capital only'}</td>
+          <td style="color:var(--ink3)">${v.notes || '—'}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Map
+    if (!worldTopo) {
+      worldTopo = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    }
+    document.getElementById('map-loader2').style.display = 'none';
+    const wrap = document.getElementById('client-map-wrap');
+    wrap.querySelectorAll('svg').forEach(s=>s.remove());
+    const W = wrap.clientWidth || 800, H = 420;
+    const svg = d3.select('#client-map-wrap').append('svg')
+      .attr('viewBox', `0 0 ${W} ${H}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+    const proj = d3.geoNaturalEarth1().scale(W/6.2).translate([W/2, H/2]);
+    const path = d3.geoPath(proj);
+    const features = topojson.feature(worldTopo, worldTopo.objects.countries).features;
+    svg.selectAll('.country-path-admin')
+      .data(features.filter(f=>f.properties.name))
+      .join('path')
+      .attr('class','country-path-admin')
+      .attr('d', path)
+      .attr('fill', d => {
+        const info = client.countries[d.properties.name];
+        return COLORS[info?.status || 'blue'];
+      });
+  }
+
+  window.showListView = function() {
+    document.getElementById('detail-panel').style.display = 'none';
+    document.getElementById('detail-panel').classList.remove('open');
+    document.getElementById('list-view').style.display = 'block';
+  };
+</script>
+</body>
+</html>
